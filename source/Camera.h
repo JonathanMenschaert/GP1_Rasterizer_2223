@@ -70,8 +70,8 @@ namespace dae
 			const float deltaTime = pTimer->GetElapsed();
 
 			//Camera Update Logic
-			const float linearSpeed{ 4.f };
-			const float rotationSpeed{ 15.f };
+			const float linearSpeed{ 10.f };
+			const float rotationSpeed{ 50.f };
 
 			//Keyboard Input
 			const uint8_t* pKeyboardState = SDL_GetKeyboardState(nullptr);

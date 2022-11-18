@@ -47,6 +47,7 @@ namespace dae
 		int m_Width{};
 		int m_Height{};
 		float m_AspectRatio{};
+		float* m_pDepthBufferPixels{};
 
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; //W1 Version
