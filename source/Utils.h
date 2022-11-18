@@ -173,4 +173,17 @@ namespace dae
 		}
 #pragma warning(pop)
 	}
+
+	namespace GeometryUtils
+	{
+		inline bool IsPointInTriangle(const Vector2& v0, const Vector2& v1, const Vector2& v2, const Vector2& pixel) 
+		{
+			if (Vector2::Cross(v1 - v0, pixel - v0) < 0.f) return false;
+			if (Vector2::Cross(v2 - v1, pixel - v1) < 0.f) return false;
+			if (Vector2::Cross(v0 - v2, pixel - v2) < 0.f) return false;
+			return true;
+		}
+
+
+	}
 }

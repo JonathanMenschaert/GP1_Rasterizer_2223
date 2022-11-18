@@ -45,25 +45,11 @@ void Renderer::Render()
 	SDL_LockSurface(m_pBackBuffer);
 
 	//RENDER LOGIC
-	for (int px{}; px < m_Width; ++px)
-	{
-		for (int py{}; py < m_Height; ++py)
-		{
-			float gradient = px / static_cast<float>(m_Width);
-			gradient += py / static_cast<float>(m_Width);
-			gradient /= 2.0f;
-
-			ColorRGB finalColor{ gradient, gradient, gradient };
-
-			//Update Color in Buffer
-			finalColor.MaxToOne();
-
-			m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
-				static_cast<uint8_t>(finalColor.r * 255),
-				static_cast<uint8_t>(finalColor.g * 255),
-				static_cast<uint8_t>(finalColor.b * 255));
-		}
-	}
+	Render_W1_Part1();
+	//Render_W1_Part2();
+	//Render_W1_Part3();
+	//Render_W1_Part4();
+	//Render_W1_Part5();
 
 	//@END
 	//Update SDL Surface
@@ -75,6 +61,68 @@ void Renderer::Render()
 void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const
 {
 	//Todo > W1 Projection Stage
+}
+
+void dae::Renderer::Render_W1_Part1()
+{
+	//Define Triangle - Vertices in NDC space
+	std::vector<Vector3> vertices_ndc
+	{
+		{0.f, 0.5f, 1.f},
+		{0.5f, -0.5f, 1.f},
+		{-0.5f, -0.5f, 1.f}
+	};
+
+	std::vector<Vector2> screenSpaceVertices;
+	screenSpaceVertices.reserve(vertices_ndc.size());
+	for (const auto& vertexNdc : vertices_ndc)
+	{
+		screenSpaceVertices.emplace_back(
+			Vector2{
+				(vertexNdc.x + 1) * 0.5f * m_Width,
+				(1 - vertexNdc.y) * 0.5f * m_Height
+			}
+		);
+	}
+
+	for (int px{}; px < m_Width; ++px)
+	{
+		for (int py{}; py < m_Height; ++py)
+		{
+			
+			const Vector2 pixelCoordinates{ static_cast<float>(px), static_cast<float>(py) };
+			
+
+			ColorRGB finalColor{
+				GeometryUtils::IsPointInTriangle(screenSpaceVertices[0], screenSpaceVertices[1], screenSpaceVertices[2], pixelCoordinates) ?
+				colors::White : colors::Black			
+			};
+
+			//Update Color in Buffer
+			finalColor.MaxToOne();
+
+			m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+				static_cast<uint8_t>(finalColor.r * 255),
+				static_cast<uint8_t>(finalColor.g * 255),
+				static_cast<uint8_t>(finalColor.b * 255));
+		}
+	}
+}
+
+void dae::Renderer::Render_W1_Part2()
+{
+}
+
+void dae::Renderer::Render_W1_Part3()
+{
+}
+
+void dae::Renderer::Render_W1_Part4()
+{
+}
+
+void dae::Renderer::Render_W1_Part5()
+{
 }
 
 bool Renderer::SaveBufferToImage() const
