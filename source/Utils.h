@@ -176,14 +176,29 @@ namespace dae
 
 	namespace GeometryUtils
 	{
-		inline bool IsPointInTriangle(const Vector2& v0, const Vector2& v1, const Vector2& v2, const Vector2& pixel) 
+
+
+
+		inline bool IsPointInTriangle(const Vector2& v0, const Vector2& v1, const Vector2& v2, const Vector2& pixel, 
+			float& signedAreaOutV0V1, float& signedAreaOutV1V2, float& signedAreaOutV2V0)
 		{
-			if (Vector2::Cross(v1 - v0, pixel - v0) < 0.f) return false;
-			if (Vector2::Cross(v2 - v1, pixel - v1) < 0.f) return false;
-			if (Vector2::Cross(v0 - v2, pixel - v2) < 0.f) return false;
+			signedAreaOutV0V1 = Vector2::Cross(v1 - v0, pixel - v0);
+			if (signedAreaOutV0V1 < 0.f) return false;
+
+			signedAreaOutV1V2 = Vector2::Cross(v2 - v1, pixel - v1);
+			if (signedAreaOutV1V2 < 0.f) return false;
+
+			signedAreaOutV2V0 = Vector2::Cross(v0 - v2, pixel - v2);
+			if (signedAreaOutV2V0 < 0.f) return false;
+
 			return true;
 		}
 
+		inline bool IsPointInTriangle(const Vector2& v0, const Vector2& v1, const Vector2& v2, const Vector2& pixel)
+		{
+			float signedArea0, signedArea1, signedArea2;
+			return IsPointInTriangle(v0, v1, v2, pixel, signedArea0, signedArea1, signedArea2);
+		}
 
 	}
 }
