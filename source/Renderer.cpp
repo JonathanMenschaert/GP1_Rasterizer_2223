@@ -55,6 +55,34 @@ void Renderer::Render()
 	SDL_LockSurface(m_pBackBuffer);
 
 	//RENDER LOGIC
+	//Render_W1();
+	Render_W2();
+
+	//@END
+	//Update SDL Surface
+	SDL_UnlockSurface(m_pBackBuffer);
+	SDL_BlitSurface(m_pBackBuffer, 0, m_pFrontBuffer, 0);
+	SDL_UpdateWindowSurface(m_pWindow);
+}
+
+void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const
+{
+	vertices_out.reserve(vertices_in.size());
+	for (const auto& vertexIn : vertices_in)
+	{
+		Vertex vertexOut{};
+		vertexOut.position = m_Camera.invViewMatrix.TransformPoint(vertexIn.position);
+
+		vertexOut.position.x = vertexOut.position.x / vertexOut.position.z / (m_Camera.fov * m_AspectRatio);
+		vertexOut.position.y = vertexOut.position.y / vertexOut.position.z / (m_Camera.fov);
+		vertices_out.emplace_back(vertexOut);
+	}
+}
+
+
+
+void dae::Renderer::Render_W1()
+{
 	//Define Triangle - Vertices in NDC space
 	std::vector<Vertex> vertices_world
 	{
@@ -140,25 +168,140 @@ void Renderer::Render()
 			}
 		}
 	}
-
-	//@END
-	//Update SDL Surface
-	SDL_UnlockSurface(m_pBackBuffer);
-	SDL_BlitSurface(m_pBackBuffer, 0, m_pFrontBuffer, 0);
-	SDL_UpdateWindowSurface(m_pWindow);
 }
 
-void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const
+void dae::Renderer::Render_W2()
 {
-	vertices_out.reserve(vertices_in.size());
-	for (const auto& vertexIn : vertices_in)
+	std::vector<Mesh> meshes_world
 	{
-		Vertex vertexOut{};
-		vertexOut.position = m_Camera.invViewMatrix.TransformPoint(vertexIn.position);
+		Mesh
+		{
+			{
+				Vertex{Vector3{-3.f, 3.f, -2.f}},
+				Vertex{Vector3{0.f, 3.f, -2.f}},
+				Vertex{Vector3{3.f, 3.f, -2.f}},
+				Vertex{Vector3{-3.f, 0.f, -2.f}},
+				Vertex{Vector3{0.f, 0.f, -2.f}},
+				Vertex{Vector3{3.f, 0.f, -2.f}},
+				Vertex{Vector3{-3.f, -3.f, -2.f}},
+				Vertex{Vector3{0.f, -3.f, -2.f}},
+				Vertex{Vector3{3.f, -3.f, -2.f}}
+			},
+			{
+				3, 0, 4, 1, 5, 2,
+				2, 6,
+				6, 3, 7, 4, 8, 5
 
-		vertexOut.position.x = vertexOut.position.x / vertexOut.position.z / (m_Camera.fov * m_AspectRatio);
-		vertexOut.position.y = vertexOut.position.y / vertexOut.position.z / (m_Camera.fov);
-		vertices_out.emplace_back(vertexOut);
+				/*3, 0, 1,
+				1, 4, 3,
+				4, 1, 2, 
+				2, 5, 4,
+				6, 3, 4, 
+				4, 7, 6,
+				7, 4, 5, 
+				5, 8, 7*/
+
+			},
+			PrimitiveTopology::TriangleStrip
+		}	
+
+	};
+
+
+	
+	for (const auto& mesh : meshes_world)
+	{
+		std::vector<Vertex> vertices_ndc;
+		VertexTransformationFunction(mesh.vertices, vertices_ndc);
+		std::vector<Vector2> screenVertices;
+		screenVertices.reserve(vertices_ndc.size());
+		for (const auto& vertexNdc : vertices_ndc)
+		{
+			screenVertices.emplace_back(
+				Vector2{
+					(vertexNdc.position.x + 1) * 0.5f * m_Width,
+					(1 - vertexNdc.position.y) * 0.5f * m_Height
+				}
+			);
+		}
+		
+		switch (mesh.primitiveTopology)
+		{
+		case PrimitiveTopology::TriangleStrip:
+			for (size_t vertIdx{}; vertIdx < mesh.indices.size() - 2; ++vertIdx)
+			{
+				RenderMeshTriangle(mesh, screenVertices, vertIdx, vertIdx % 2);
+			}
+			break;
+		case PrimitiveTopology::TriangleList:
+			for (size_t vertIdx{}; vertIdx < mesh.indices.size() - 2; vertIdx += 3)
+			{
+				RenderMeshTriangle(mesh, screenVertices, vertIdx);
+			}
+			break;
+		}
+		
+		
+	}
+}
+
+void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& screenVertices, size_t vertIdx, bool swapVertices)
+{
+	const size_t vertIdx0{mesh.indices[vertIdx + swapVertices * 2] };
+	const size_t vertIdx1{ mesh.indices[vertIdx + 1]};
+	const size_t vertIdx2{ mesh.indices[vertIdx + !swapVertices * 2]};
+
+	if (vertIdx0 == vertIdx1 || vertIdx1 == vertIdx2 || vertIdx2 == vertIdx0) return;
+
+	Vector2 boundingBoxMin{ Vector2::Min(screenVertices[vertIdx0], Vector2::Min(screenVertices[vertIdx1], screenVertices[vertIdx2])) };
+	Vector2 boundingBoxMax{ Vector2::Max(screenVertices[vertIdx0], Vector2::Max(screenVertices[vertIdx1], screenVertices[vertIdx2])) };
+	const Vector2 screenVector{ static_cast<float>(m_Width), static_cast<float>(m_Height) };
+	boundingBoxMin = Vector2::Max(Vector2::Zero, Vector2::Min(boundingBoxMin, screenVector));
+	boundingBoxMax = Vector2::Max(Vector2::Zero, Vector2::Min(boundingBoxMax, screenVector));
+	for (int px{ static_cast<int>(boundingBoxMin.x) }; px < boundingBoxMax.x; ++px)
+	{
+		for (int py{ static_cast<int>(boundingBoxMin.y) }; py < boundingBoxMax.y; ++py)
+		{
+			const int pixelIdx{ px + py * m_Width };
+			const Vector2 pixelCoordinates{ static_cast<float>(px), static_cast<float>(py) };
+			float signedAreaV0V1, signedAreaV1V2, signedAreaV2V0;
+
+			if (GeometryUtils::IsPointInTriangle(screenVertices[vertIdx0], screenVertices[vertIdx1],
+				screenVertices[vertIdx2], pixelCoordinates, signedAreaV0V1, signedAreaV1V2, signedAreaV2V0))
+			{
+				const float triangleArea{ 1.f / (Vector2::Cross(screenVertices[vertIdx1] - screenVertices[vertIdx0],
+					screenVertices[vertIdx2] - screenVertices[vertIdx0])) };
+
+				const float weightV0{ signedAreaV1V2 * triangleArea };
+				const float weightV1{ signedAreaV2V0 * triangleArea };
+				const float weightV2{ signedAreaV0V1 * triangleArea };
+
+				const float depthWeight
+				{
+					(mesh.vertices[vertIdx0].position.z - m_Camera.origin.z) * weightV0 +
+					(mesh.vertices[vertIdx1].position.z - m_Camera.origin.z) * weightV1 +
+					(mesh.vertices[vertIdx2].position.z - m_Camera.origin.z) * weightV2
+				};
+
+				if (m_pDepthBufferPixels[pixelIdx] < depthWeight) continue;
+				m_pDepthBufferPixels[pixelIdx] = depthWeight;
+				ColorRGB finalColor =
+				{
+					mesh.vertices[vertIdx0].color * weightV0 +
+					mesh.vertices[vertIdx1].color * weightV1 +
+					mesh.vertices[vertIdx2].color * weightV2
+				};
+
+
+				//Update Color in Buffer
+				finalColor.MaxToOne();
+
+				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+					static_cast<uint8_t>(finalColor.r * 255),
+					static_cast<uint8_t>(finalColor.g * 255),
+					static_cast<uint8_t>(finalColor.b * 255));
+			}
+		}
 	}
 }
 
