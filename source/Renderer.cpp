@@ -259,6 +259,7 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 
 	Vector2 boundingBoxMin{ Vector2::Min(screenVertices[vertIdx0], Vector2::Min(screenVertices[vertIdx1], screenVertices[vertIdx2])) };
 	Vector2 boundingBoxMax{ Vector2::Max(screenVertices[vertIdx0], Vector2::Max(screenVertices[vertIdx1], screenVertices[vertIdx2])) };
+
 	const Vector2 screenVector{ static_cast<float>(m_Width), static_cast<float>(m_Height) };
 	boundingBoxMin = Vector2::Max(Vector2::Zero, Vector2::Min(boundingBoxMin, screenVector));
 	boundingBoxMax = Vector2::Max(Vector2::Zero, Vector2::Min(boundingBoxMax, screenVector));
@@ -280,11 +281,15 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 				const float weightV1{ signedAreaV2V0 * triangleArea };
 				const float weightV2{ signedAreaV0V1 * triangleArea };
 
+				const float depthV0{ ndcVertices[vertIdx0].position.z };
+				const float depthV1{ ndcVertices[vertIdx1].position.z };
+				const float depthV2{ ndcVertices[vertIdx2].position.z };
+
 				const float depthInterpolated
 				{
-					1.f / (1.f / ndcVertices[vertIdx0].position.z * weightV0 +
-					1.f / ndcVertices[vertIdx1].position.z * weightV1 +
-					1.f / ndcVertices[vertIdx2].position.z * weightV2)
+					1.f / (1.f / depthV0 * weightV0 +
+					1.f / depthV1 * weightV1 +
+					1.f / depthV2 * weightV2)
 				};
 
 				if (m_pDepthBufferPixels[pixelIdx] < depthInterpolated) continue;
@@ -292,9 +297,9 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 
 				Vector2 pixelUV
 				{
-					(mesh.vertices[vertIdx0].uv / ndcVertices[vertIdx0].position.z * weightV0 +
-					mesh.vertices[vertIdx1].uv / ndcVertices[vertIdx1].position.z * weightV1 +
-					mesh.vertices[vertIdx2].uv / ndcVertices[vertIdx2].position.z * weightV2) * depthInterpolated
+					(mesh.vertices[vertIdx0].uv / depthV0 * weightV0 +
+					mesh.vertices[vertIdx1].uv / depthV1 * weightV1 +
+					mesh.vertices[vertIdx2].uv / depthV2 * weightV2) * depthInterpolated
 				};
 				ColorRGB finalColor{m_pTexture->Sample(pixelUV)};
 
