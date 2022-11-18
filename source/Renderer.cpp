@@ -14,8 +14,9 @@
 
 using namespace dae;
 
-Renderer::Renderer(SDL_Window* pWindow) :
-	m_pWindow(pWindow)
+Renderer::Renderer(SDL_Window* pWindow) 
+	: m_pWindow(pWindow)
+	, m_pTexture{Texture::LoadFromFile("Resources/uv_grid_2.png") }
 {
 	//Initialize
 	SDL_GetWindowSize(pWindow, &m_Width, &m_Height);
@@ -37,7 +38,10 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 Renderer::~Renderer()
 {
-	//delete[] m_pDepthBufferPixels;
+	delete[] m_pDepthBufferPixels;
+	m_pDepthBufferPixels = nullptr;
+	delete m_pTexture;
+	m_pTexture = nullptr;
 }
 
 void Renderer::Update(Timer* pTimer)
@@ -172,26 +176,27 @@ void dae::Renderer::Render_W1()
 
 void dae::Renderer::Render_W2()
 {
-	std::vector<Mesh> meshes_world
+	std::vector<Mesh> meshesWorld
 	{
 		Mesh
 		{
 			{
-				Vertex{Vector3{-3.f, 3.f, -2.f}},
-				Vertex{Vector3{0.f, 3.f, -2.f}},
-				Vertex{Vector3{3.f, 3.f, -2.f}},
-				Vertex{Vector3{-3.f, 0.f, -2.f}},
-				Vertex{Vector3{0.f, 0.f, -2.f}},
-				Vertex{Vector3{3.f, 0.f, -2.f}},
-				Vertex{Vector3{-3.f, -3.f, -2.f}},
-				Vertex{Vector3{0.f, -3.f, -2.f}},
-				Vertex{Vector3{3.f, -3.f, -2.f}}
+				Vertex{Vector3{-3.f, 3.f, -2.f}, colors::White, Vector2{0.f, 0.f}},
+				Vertex{Vector3{0.f, 3.f, -2.f}, colors::White, Vector2{0.5f, 0.f}},
+				Vertex{Vector3{3.f, 3.f, -2.f}, colors::White, Vector2{1.f, 0.f}},
+				Vertex{Vector3{-3.f, 0.f, -2.f}, colors::White, Vector2{0.f, 0.5f}},
+				Vertex{Vector3{0.f, 0.f, -2.f}, colors::White, Vector2{0.5f, 0.5f}},
+				Vertex{Vector3{3.f, 0.f, -2.f}, colors::White, Vector2{1.f, 0.5f}},
+				Vertex{Vector3{-3.f, -3.f, -2.f}, colors::White, Vector2{0.f, 1.f}},
+				Vertex{Vector3{0.f, -3.f, -2.f}, colors::White, Vector2{0.5f, 1.f}},
+				Vertex{Vector3{3.f, -3.f, -2.f}, colors::White, Vector2{1.f, 1.f}}
 			},
 			{
 				3, 0, 4, 1, 5, 2,
 				2, 6,
 				6, 3, 7, 4, 8, 5
 
+				//TriangleList Indices
 				/*3, 0, 1,
 				1, 4, 3,
 				4, 1, 2, 
@@ -206,11 +211,10 @@ void dae::Renderer::Render_W2()
 		}	
 
 	};
-
-
 	
-	for (const auto& mesh : meshes_world)
+	for (const auto& mesh : meshesWorld)
 	{
+		//Check this later
 		std::vector<Vertex> vertices_ndc;
 		VertexTransformationFunction(mesh.vertices, vertices_ndc);
 		std::vector<Vector2> screenVertices;
@@ -230,13 +234,13 @@ void dae::Renderer::Render_W2()
 		case PrimitiveTopology::TriangleStrip:
 			for (size_t vertIdx{}; vertIdx < mesh.indices.size() - 2; ++vertIdx)
 			{
-				RenderMeshTriangle(mesh, screenVertices, vertIdx, vertIdx % 2);
+				RenderMeshTriangle(mesh, screenVertices, vertices_ndc, vertIdx, vertIdx % 2);
 			}
 			break;
 		case PrimitiveTopology::TriangleList:
 			for (size_t vertIdx{}; vertIdx < mesh.indices.size() - 2; vertIdx += 3)
 			{
-				RenderMeshTriangle(mesh, screenVertices, vertIdx);
+				RenderMeshTriangle(mesh, screenVertices, vertices_ndc, vertIdx);
 			}
 			break;
 		}
@@ -245,11 +249,11 @@ void dae::Renderer::Render_W2()
 	}
 }
 
-void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& screenVertices, size_t vertIdx, bool swapVertices)
+void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& screenVertices, const std::vector<Vertex> ndcVertices, size_t vertIdx, bool swapVertices)
 {
-	const size_t vertIdx0{mesh.indices[vertIdx + swapVertices * 2] };
-	const size_t vertIdx1{ mesh.indices[vertIdx + 1]};
-	const size_t vertIdx2{ mesh.indices[vertIdx + !swapVertices * 2]};
+	const uint32_t vertIdx0{mesh.indices[vertIdx + swapVertices * 2] };
+	const uint32_t vertIdx1{ mesh.indices[vertIdx + 1]};
+	const uint32_t vertIdx2{ mesh.indices[vertIdx + !swapVertices * 2]};
 
 	if (vertIdx0 == vertIdx1 || vertIdx1 == vertIdx2 || vertIdx2 == vertIdx0) return;
 
@@ -276,21 +280,23 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 				const float weightV1{ signedAreaV2V0 * triangleArea };
 				const float weightV2{ signedAreaV0V1 * triangleArea };
 
-				const float depthWeight
+				const float depthInterpolated
 				{
-					(mesh.vertices[vertIdx0].position.z - m_Camera.origin.z) * weightV0 +
-					(mesh.vertices[vertIdx1].position.z - m_Camera.origin.z) * weightV1 +
-					(mesh.vertices[vertIdx2].position.z - m_Camera.origin.z) * weightV2
+					1.f / (1.f / ndcVertices[vertIdx0].position.z * weightV0 +
+					1.f / ndcVertices[vertIdx1].position.z * weightV1 +
+					1.f / ndcVertices[vertIdx2].position.z * weightV2)
 				};
 
-				if (m_pDepthBufferPixels[pixelIdx] < depthWeight) continue;
-				m_pDepthBufferPixels[pixelIdx] = depthWeight;
-				ColorRGB finalColor =
+				if (m_pDepthBufferPixels[pixelIdx] < depthInterpolated) continue;
+				m_pDepthBufferPixels[pixelIdx] = depthInterpolated;
+
+				Vector2 pixelUV
 				{
-					mesh.vertices[vertIdx0].color * weightV0 +
-					mesh.vertices[vertIdx1].color * weightV1 +
-					mesh.vertices[vertIdx2].color * weightV2
+					(mesh.vertices[vertIdx0].uv / ndcVertices[vertIdx0].position.z * weightV0 +
+					mesh.vertices[vertIdx1].uv / ndcVertices[vertIdx1].position.z * weightV1 +
+					mesh.vertices[vertIdx2].uv / ndcVertices[vertIdx2].position.z * weightV2) * depthInterpolated
 				};
+				ColorRGB finalColor{m_pTexture->Sample(pixelUV)};
 
 
 				//Update Color in Buffer
