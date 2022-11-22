@@ -41,7 +41,6 @@ namespace dae
 		uint32_t* m_pBackBufferPixels{};
 
 		Camera m_Camera{};
-
 		int m_Width{};
 		int m_Height{};
 		float m_AspectRatio{};

@@ -83,8 +83,6 @@ void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_
 	}
 }
 
-
-
 void dae::Renderer::Render_W1()
 {
 	//Define Triangle - Vertices in NDC space
@@ -243,9 +241,7 @@ void dae::Renderer::Render_W2()
 				RenderMeshTriangle(mesh, screenVertices, vertices_ndc, vertIdx);
 			}
 			break;
-		}
-		
-		
+		}		
 	}
 }
 
