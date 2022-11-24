@@ -30,6 +30,7 @@ namespace dae
 
 		void Update(Timer* pTimer);
 		void Render();
+		void SwitchRenderMode();
 
 		bool SaveBufferToImage() const;
 
@@ -46,6 +47,20 @@ namespace dae
 		float m_AspectRatio{};
 		float* m_pDepthBufferPixels{};
 		Texture* m_pTexture{ nullptr };
+		std::vector<Mesh> m_Meshes{};
+
+		const float m_RotationSpeed{ 1.f };
+
+		enum class RenderMode
+		{
+			FinalColor,
+			DepthBuffer,
+
+			//Declare modes above
+			COUNT
+		};
+
+		RenderMode m_RenderMode{ RenderMode::FinalColor };
 
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; //W1 Version

@@ -172,6 +172,8 @@ namespace dae
 #endif
 		}
 #pragma warning(pop)
+
+		
 	}
 
 	namespace GeometryUtils
@@ -198,6 +200,11 @@ namespace dae
 		{
 			float signedArea0, signedArea1, signedArea2;
 			return IsPointInTriangle(v0, v1, v2, pixel, signedArea0, signedArea1, signedArea2);
+		}
+
+		inline bool IsVertexInFrustrum(const Vector4& vertex, float min = -1.f, float max = 1.f)
+		{
+			return vertex.x >= min && vertex.x <= max && vertex.y >= min && vertex.y <= max && vertex.z >= 0.f && vertex.z <= max;
 		}
 
 	}
