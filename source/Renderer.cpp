@@ -510,8 +510,9 @@ ColorRGB dae::Renderer::PixelShading(const Vertex_Out& v)
 	{
 		const Vector3 binormal{ Vector3::Cross(v.normal, v.tangent) };
 		const Matrix tangentSpaceAxis{ v.tangent, binormal.Normalized(), v.normal, Vector3{0.f, 0.f, 0.f}};
-		sampledNormal = tangentSpaceAxis.TransformVector(m_pNormalTexture->SampleNormal(v.uv));
-		sampledNormal = 2.f * sampledNormal - Vector3{ 1.f, 1.f, 1.f };
+		sampledNormal = m_pNormalTexture->SampleNormal(v.uv);
+		sampledNormal = (2.f * sampledNormal) - Vector3{ 1.f, 1.f, 1.f };
+		sampledNormal = tangentSpaceAxis.TransformVector(sampledNormal);
 		sampledNormal.Normalize();
 	}
 	
