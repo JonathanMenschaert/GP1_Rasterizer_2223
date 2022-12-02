@@ -16,7 +16,10 @@ using namespace dae;
 
 Renderer::Renderer(SDL_Window* pWindow) 
 	: m_pWindow(pWindow)
-	, m_pTexture{Texture::LoadFromFile("Resources/tuktuk.png") }
+	, m_pDiffuseTexture{Texture::LoadFromFile("Resources/vehicle_diffuse.png") }
+	, m_pNormalTexture{Texture::LoadFromFile("Resources/Vehicle_normal.png")}
+	, m_pGlossinessTexture{Texture::LoadFromFile("Resources/Vehicle_gloss.png")}
+	, m_pSpecularTexture{Texture::LoadFromFile("Resources/Vehicle_specular.png")}
 {
 	//Initialize
 	SDL_GetWindowSize(pWindow, &m_Width, &m_Height);
@@ -33,9 +36,10 @@ Renderer::Renderer(SDL_Window* pWindow)
 	std::fill_n(m_pDepthBufferPixels, nrPixels, FLT_MAX);
 
 	//Initialize Camera
-	m_Camera.Initialize(60.f, { .0f,5.f,-30.f }, m_AspectRatio);
+	m_Camera.Initialize(45.f, { 0.f,0.f,0.f }, m_AspectRatio);
 	Mesh mesh{ {},{}, PrimitiveTopology::TriangleList};
-	Utils::ParseOBJ("Resources/tuktuk.obj", mesh.vertices, mesh.indices);
+	Utils::ParseOBJ("Resources/vehicle.obj", mesh.vertices, mesh.indices);
+	mesh.worldMatrix = Matrix::CreateTranslation(0.f, 0.f, 50.f) * mesh.worldMatrix;
 	m_Meshes.push_back(mesh);
 }
 
@@ -43,16 +47,25 @@ Renderer::~Renderer()
 {
 	delete[] m_pDepthBufferPixels;
 	m_pDepthBufferPixels = nullptr;
-	delete m_pTexture;
-	m_pTexture = nullptr;
+	delete m_pDiffuseTexture;
+	m_pDiffuseTexture = nullptr;
+	delete m_pNormalTexture;
+	m_pNormalTexture = nullptr;
+	delete m_pDiffuseTexture;
+	m_pDiffuseTexture = nullptr;
+	delete m_pGlossinessTexture;
+	m_pGlossinessTexture = nullptr;
 }
 
 void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
-	for (auto& mesh : m_Meshes)
+	if (m_ShouldRotate)
 	{
-		mesh.worldMatrix *= Matrix::CreateRotationY(m_RotationSpeed * pTimer->GetElapsed());
+		for (auto& mesh : m_Meshes)
+		{
+			mesh.worldMatrix = Matrix::CreateRotationY(m_RotationSpeed * pTimer->GetElapsed()) * mesh.worldMatrix;
+		}
 	}
 }
 
@@ -64,7 +77,6 @@ void Renderer::Render()
 	const int nrPixels{ m_Width * m_Height };
 	std::fill_n(m_pDepthBufferPixels, nrPixels, 1.f);
 	SDL_LockSurface(m_pBackBuffer);
-
 	//RENDER LOGIC
 	//Render_W1();
 	//Render_W2();
@@ -74,13 +86,6 @@ void Renderer::Render()
 	SDL_UnlockSurface(m_pBackBuffer);
 	SDL_BlitSurface(m_pBackBuffer, 0, m_pFrontBuffer, 0);
 	SDL_UpdateWindowSurface(m_pWindow);
-}
-
-void dae::Renderer::SwitchRenderMode()
-{
-	int count{ static_cast<int>(RenderMode::COUNT) };
-	int currentMode{ static_cast<int>(m_RenderMode) };
-	m_RenderMode = static_cast<RenderMode>((currentMode + 1) % count);
 }
 
 void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const
@@ -104,14 +109,16 @@ void Renderer::VertexTransformationFunction(Mesh& mesh) const
 	const Matrix worldViewProjectionMatrix{ mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix };
 	for (const auto& vertexIn : mesh.vertices)
 	{
-		Vertex_Out vertexOut{ Vector4{ vertexIn.position, 1.f}, vertexIn.color, vertexIn.uv, vertexIn.normal, vertexIn.tangent };
+		Vertex_Out vertexOut{ Vector4{ vertexIn.position, 1.f}, vertexIn.color, 
+			vertexIn.uv, vertexIn.normal, vertexIn.tangent, vertexIn.viewDirection};
 		vertexOut.position = worldViewProjectionMatrix.TransformPoint(vertexOut.position);
 		const float perspectiveDiv{ 1.f / vertexOut.position.w };
 		vertexOut.position.x *= perspectiveDiv;
 		vertexOut.position.y *= perspectiveDiv;
 		vertexOut.position.z *= perspectiveDiv;
-		/*vertexOut.position.x = vertexOut.position.x / vertexOut.position.z / (m_Camera.fov * m_AspectRatio);
-		vertexOut.position.y = vertexOut.position.y / vertexOut.position.z / (m_Camera.fov);*/
+		vertexOut.normal = mesh.worldMatrix.TransformVector(vertexIn.normal);
+		vertexOut.tangent = mesh.worldMatrix.TransformVector(vertexIn.tangent);
+		vertexOut.viewDirection = (mesh.worldMatrix.TransformPoint(vertexIn.position) - m_Camera.origin);
 		mesh.vertices_out.emplace_back(vertexOut);
 	}
 }
@@ -355,10 +362,14 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 	const uint32_t vertIdx1{ mesh.indices[vertIdx + 1] };
 	const uint32_t vertIdx2{ mesh.indices[vertIdx + !swapVertices * 2] };
 
-	if (vertIdx0 == vertIdx1 || vertIdx1 == vertIdx2 || vertIdx2 == vertIdx0
-		|| !GeometryUtils::IsVertexInFrustrum(mesh.vertices_out[vertIdx0].position)
+	if (vertIdx0 == vertIdx1 || vertIdx1 == vertIdx2 || vertIdx2 == vertIdx0) return;
+
+	if (!GeometryUtils::IsVertexInFrustrum(mesh.vertices_out[vertIdx0].position)
 		|| !GeometryUtils::IsVertexInFrustrum(mesh.vertices_out[vertIdx1].position)
-		|| !GeometryUtils::IsVertexInFrustrum(mesh.vertices_out[vertIdx2].position)) return;
+		|| !GeometryUtils::IsVertexInFrustrum(mesh.vertices_out[vertIdx2].position))
+	{
+		return;
+	}
 
 	Vector2 boundingBoxMin{ Vector2::Min(screenVertices[vertIdx0], Vector2::Min(screenVertices[vertIdx1], screenVertices[vertIdx2])) };
 	Vector2 boundingBoxMax{ Vector2::Max(screenVertices[vertIdx0], Vector2::Max(screenVertices[vertIdx1], screenVertices[vertIdx2])) };
@@ -407,19 +418,45 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 						1.f / mesh.vertices_out[vertIdx2].position.w * weightV2)
 					};
 
-					Vector2 pixelUV
+					const Vector2 pixelUV
 					{
 						(mesh.vertices_out[vertIdx0].uv / mesh.vertices_out[vertIdx0].position.w * weightV0 +
 						mesh.vertices_out[vertIdx1].uv / mesh.vertices_out[vertIdx1].position.w * weightV1 +
 						mesh.vertices_out[vertIdx2].uv / mesh.vertices_out[vertIdx2].position.w * weightV2) * viewDepthInterpolated
 					};
-					
-					finalColor = m_pTexture->Sample(pixelUV);
+
+					const Vector3 normal
+					{
+						(mesh.vertices_out[vertIdx0].normal / mesh.vertices_out[vertIdx0].position.w * weightV0 +
+						mesh.vertices_out[vertIdx1].normal / mesh.vertices_out[vertIdx1].position.w * weightV1 +
+						mesh.vertices_out[vertIdx2].normal / mesh.vertices_out[vertIdx2].position.w * weightV2) * viewDepthInterpolated
+					};
+
+					const Vector3 tangent
+					{
+						(mesh.vertices_out[vertIdx0].tangent / mesh.vertices_out[vertIdx0].position.w * weightV0 +
+						mesh.vertices_out[vertIdx1].tangent / mesh.vertices_out[vertIdx1].position.w * weightV1 +
+						mesh.vertices_out[vertIdx2].tangent / mesh.vertices_out[vertIdx2].position.w * weightV2) * viewDepthInterpolated
+					};
+
+					const Vector3 viewDirection
+					{
+						(mesh.vertices_out[vertIdx0].viewDirection / mesh.vertices_out[vertIdx0].position.w * weightV0 +
+						mesh.vertices_out[vertIdx1].viewDirection / mesh.vertices_out[vertIdx1].position.w * weightV1 +
+						mesh.vertices_out[vertIdx2].viewDirection / mesh.vertices_out[vertIdx2].position.w * weightV2) * viewDepthInterpolated
+					};
+
+					Vertex_Out interpolatedVertex{};
+					interpolatedVertex.uv = pixelUV;
+					interpolatedVertex.normal = normal.Normalized();
+					interpolatedVertex.tangent = tangent.Normalized();
+					interpolatedVertex.viewDirection = viewDirection.Normalized();
+					finalColor = PixelShading(interpolatedVertex);
 				}
 				break;
 				case RenderMode::DepthBuffer:
 				{
-					const float depthRemapped{ DepthRemap(depthInterpolated, 0.995f, 1.f) };
+					const float depthRemapped{ DepthRemap(depthInterpolated, 0.997f, 1.f) };
 					finalColor = ColorRGB{ depthRemapped, depthRemapped, depthRemapped };
 				}
 				}
@@ -434,6 +471,78 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 					static_cast<uint8_t>(finalColor.b * 255));
 			}
 		}
+	}
+}
+
+void dae::Renderer::CycleRenderMode()
+{
+	int count{ static_cast<int>(RenderMode::COUNT) };
+	int currentMode{ static_cast<int>(m_RenderMode) };
+	m_RenderMode = static_cast<RenderMode>((currentMode + 1) % count);
+}
+
+void dae::Renderer::ToggleRotation()
+{
+	m_ShouldRotate = !m_ShouldRotate;
+}
+
+void dae::Renderer::ToggleNormalMap()
+{
+	m_ShouldRenderNormals = !m_ShouldRenderNormals;
+}
+
+void dae::Renderer::CycleShadingMode()
+{
+	int count{ static_cast<int>(ShadingMode::COUNT) };
+	int currentMode{ static_cast<int>(m_ShadingMode) };
+	m_ShadingMode = static_cast<ShadingMode>((currentMode + 1) % count);
+}
+
+ColorRGB dae::Renderer::PixelShading(const Vertex_Out& v)
+{
+	const float lightIntensity{ 7.f };
+	const float kd{ 1.f };
+	const float shininess{ 25.f };
+	Vector3 sampledNormal{ v.normal };
+	const ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
+	
+	if (m_ShouldRenderNormals)
+	{
+		const Vector3 binormal{ Vector3::Cross(v.normal, v.tangent) };
+		const Matrix tangentSpaceAxis{ v.tangent, binormal.Normalized(), v.normal, Vector3{0.f, 0.f, 0.f}};
+		sampledNormal = tangentSpaceAxis.TransformVector(m_pNormalTexture->SampleNormal(v.uv));
+		sampledNormal = 2.f * sampledNormal - Vector3{ 1.f, 1.f, 1.f };
+		sampledNormal.Normalize();
+	}
+	
+	const float observedArea{ std::max(Vector3::Dot(sampledNormal, -m_LightDirection), 0.f) };
+	const ColorRGB observedAreaColor{ observedArea, observedArea, observedArea };
+	switch (m_ShadingMode)
+	{
+	case ShadingMode::Combined:
+	{
+		const ColorRGB diffuse{ dae::BRDF::Lambert(kd, m_pDiffuseTexture->Sample(v.uv)) * lightIntensity };
+		const ColorRGB specular{ BRDF::Phong(m_pSpecularTexture->Sample(v.uv), 1.f, m_pGlossinessTexture->Sample(v.uv).r * shininess,
+			m_LightDirection, -v.viewDirection, sampledNormal) };
+		return (diffuse  + specular + ambient) * observedArea;
+	}
+	case ShadingMode::ObservedArea:
+	{
+		return observedAreaColor;
+	}
+	case ShadingMode::Diffuse:
+	{
+		const ColorRGB diffuse{ BRDF::Lambert(kd, m_pDiffuseTexture->Sample(v.uv) * lightIntensity) };
+		return diffuse * observedAreaColor;
+	}
+	case ShadingMode::Specular:
+	{
+		const ColorRGB specular{ BRDF::Phong(m_pSpecularTexture->Sample(v.uv), 1.f, m_pGlossinessTexture->Sample(v.uv).r * shininess, 
+			m_LightDirection, -v.viewDirection, sampledNormal) };
+		return specular *observedAreaColor;
+	}
+	default:
+		return ColorRGB{};
 	}
 }
 

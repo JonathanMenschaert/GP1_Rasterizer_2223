@@ -3,7 +3,6 @@
 #include <fstream>
 #include "Math.h"
 #include "DataTypes.h"
-
 //#define DISABLE_OBJ
 
 namespace dae
@@ -22,7 +21,6 @@ namespace dae
 			assert(false && "OBJ PARSER not enabled! Check the comments in Utils::ParseOBJ");
 
 #else
-
 			std::ifstream file(filename);
 			if (!file)
 				return false;
@@ -178,9 +176,6 @@ namespace dae
 
 	namespace GeometryUtils
 	{
-
-
-
 		inline bool IsPointInTriangle(const Vector2& v0, const Vector2& v1, const Vector2& v2, const Vector2& pixel, 
 			float& signedAreaOutV0V1, float& signedAreaOutV1V2, float& signedAreaOutV2V0)
 		{
@@ -207,5 +202,28 @@ namespace dae
 			return vertex.x >= min && vertex.x <= max && vertex.y >= min && vertex.y <= max && vertex.z >= 0.f && vertex.z <= max;
 		}
 
+	}
+
+	namespace BRDF
+	{
+		static ColorRGB Lambert(float kd, const ColorRGB& cd)
+		{
+			return (cd * kd) / PI;
+		}
+
+		static ColorRGB Lambert(const ColorRGB& kd, const ColorRGB& cd)
+		{
+			return (cd * kd) / PI;
+		}
+
+		static ColorRGB Phong(const ColorRGB specularColor, float ks, float exp, const Vector3& l, const Vector3& v, const Vector3& n)
+		{
+			
+			const Vector3 reflect{ Vector3::Reflect(l, n)};
+			//Used std::max to prevent the result of the dotproduct going under 0
+			const float cosa = std::max(Vector3::Dot(reflect, v), 0.f);
+			const float specularReflection{ ks * powf(cosa, exp) };
+			return specularColor * specularReflection;
+		}
 	}
 }

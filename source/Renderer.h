@@ -30,7 +30,10 @@ namespace dae
 
 		void Update(Timer* pTimer);
 		void Render();
-		void SwitchRenderMode();
+		void CycleRenderMode();
+		void ToggleRotation();
+		void ToggleNormalMap();
+		void CycleShadingMode();
 
 		bool SaveBufferToImage() const;
 
@@ -46,10 +49,17 @@ namespace dae
 		int m_Height{};
 		float m_AspectRatio{};
 		float* m_pDepthBufferPixels{};
-		Texture* m_pTexture{ nullptr };
+		Vector3 m_LightDirection{ 0.577f, -0.577f, 0.577f };
+		Texture* m_pDiffuseTexture{ nullptr };
+		Texture* m_pNormalTexture{ nullptr };
+		Texture* m_pSpecularTexture{ nullptr };
+		Texture* m_pGlossinessTexture{ nullptr };
 		std::vector<Mesh> m_Meshes{};
 
 		const float m_RotationSpeed{ 1.f };
+		bool m_ShouldRotate{ true };
+
+		bool m_ShouldRenderNormals{ true };
 
 		enum class RenderMode
 		{
@@ -60,7 +70,19 @@ namespace dae
 			COUNT
 		};
 
+		enum class ShadingMode
+		{
+			Combined,
+			ObservedArea,
+			Diffuse,
+			Specular,
+			//Declare modes above
+			COUNT
+		};
+
+
 		RenderMode m_RenderMode{ RenderMode::FinalColor };
+		ShadingMode m_ShadingMode{ ShadingMode::Combined };
 
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; //W1 Version
@@ -69,5 +91,7 @@ namespace dae
 		void Render_W1();
 		//void Render_W2();
 		void Render_W3();
+
+		ColorRGB PixelShading(const Vertex_Out& v);
 	};
 }
