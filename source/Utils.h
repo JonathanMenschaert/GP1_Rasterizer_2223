@@ -176,6 +176,19 @@ namespace dae
 
 	namespace GeometryUtils
 	{
+		inline bool IsPointOnRightSide(const Vector2& v0, const Vector2& v1, const Vector2& point)
+		{
+			if (Vector2::Cross(v1 - v0, point - v0) < 0.f) return false;
+			return true;
+		}
+
+		inline Vector2 CalculateIntersection(const Vector2& a0, const Vector2& a1, const Vector2& b0, const Vector2& b1)
+		{
+			const Vector2 lineADiff{ a0 - a1 };
+			const Vector2 lineBDiff{ b0 - b1 };
+			return (lineBDiff * Vector2::Cross(a0, a1) - lineADiff * Vector2::Cross(b0, b1) * (1.f / Vector2::Cross(lineADiff, lineBDiff)));
+		}
+
 		inline bool IsPointInTriangle(const Vector2& v0, const Vector2& v1, const Vector2& v2, const Vector2& pixel, 
 			float& signedAreaOutV0V1, float& signedAreaOutV1V2, float& signedAreaOutV2V0)
 		{
@@ -200,6 +213,21 @@ namespace dae
 		inline bool IsVertexInFrustrum(const Vector4& vertex, float min = -1.f, float max = 1.f)
 		{
 			return vertex.x >= min && vertex.x <= max && vertex.y >= min && vertex.y <= max && vertex.z >= 0.f && vertex.z <= max;
+		}
+
+		inline Vector2 GetPointOfIntersection(const Vector2& tri0, const Vector2& tri1, const Vector2& edge0, const Vector2& edge1)
+		{
+			const Vector2 triEdge{ tri0 - tri1};
+			const Vector2 windowEdge{ edge0 - edge1 };
+			
+			float triEdgeSlope{ (triEdge.y - tri1.y) / (triEdge.x - tri1.x) };
+			float windowEdgeSlope{ (windowEdge.y - edge1.y) / (windowEdge.x - edge1.x) };
+
+			float triEdgeIntercept{ tri1.y - triEdgeSlope * tri1.x };
+			float windowEdgeIntercept{ edge1.y - windowEdgeSlope * edge1.x };
+
+			float intX{ (triEdgeIntercept - windowEdgeIntercept) / (triEdgeSlope - windowEdgeSlope) };
+			float intY{ triEdgeSlope * intX + triEdgeIntercept };
 		}
 
 	}

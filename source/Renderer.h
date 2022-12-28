@@ -87,11 +87,12 @@ namespace dae
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; //W1 Version
 		void VertexTransformationFunction(Mesh& mesh) const;
-		void RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& screenVertices, size_t vertIdxbool, bool swapVertices = false);
+		void RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& screenVertices, uint32_t vertIdxbool, bool swapVertices = false);
 		void Render_W1();
 		//void Render_W2();
 		void Render_W3();
 
 		ColorRGB PixelShading(const Vertex_Out& v);
+		//std::vector<Vector2> ClipPolygonToFrustrum()
 	};
 }

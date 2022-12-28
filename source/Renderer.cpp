@@ -9,6 +9,10 @@
 #include "Texture.h"
 #include "Utils.h"
 
+//Multithreading includes
+#include <thread>
+#include <ppl.h>
+
 //Debug includes
 #include <iostream>
 
@@ -36,7 +40,7 @@ Renderer::Renderer(SDL_Window* pWindow)
 	std::fill_n(m_pDepthBufferPixels, nrPixels, FLT_MAX);
 
 	//Initialize Camera
-	m_Camera.Initialize(45.f, { 0.f,0.f,0.f }, m_AspectRatio);
+	m_Camera.Initialize(60.f, { 0.f,0.f, 0.f }, m_AspectRatio);
 	Mesh mesh{ {},{}, PrimitiveTopology::TriangleList};
 	Utils::ParseOBJ("Resources/vehicle.obj", mesh.vertices, mesh.indices);
 	mesh.worldMatrix = Matrix::CreateTranslation(0.f, 0.f, 50.f) * mesh.worldMatrix;
@@ -51,7 +55,7 @@ Renderer::~Renderer()
 	m_pDiffuseTexture = nullptr;
 	delete m_pNormalTexture;
 	m_pNormalTexture = nullptr;
-	delete m_pDiffuseTexture;
+	delete m_pSpecularTexture;
 	m_pDiffuseTexture = nullptr;
 	delete m_pGlossinessTexture;
 	m_pGlossinessTexture = nullptr;
@@ -341,22 +345,39 @@ void dae::Renderer::Render_W3()
 		switch (mesh.primitiveTopology)
 		{
 		case PrimitiveTopology::TriangleStrip:
-			for (size_t vertIdx{}; vertIdx < mesh.indices.size() - 2; ++vertIdx)
+		{
+			const uint32_t numIndices{ static_cast<uint32_t>(mesh.indices.size() - 2) };
+			concurrency::parallel_for(0u, numIndices, [=, this](uint32_t vertIdx)
+				{
+					RenderMeshTriangle(mesh, screenVertices, vertIdx, vertIdx & 1);
+					//std::cout << vertIdx << "\n";
+				}
+			);
+			/*for (size_t vertIdx{}; vertIdx < mesh.indices.size() - 2; ++vertIdx)
 			{
-				RenderMeshTriangle(mesh, screenVertices, vertIdx, vertIdx % 2);
-			}
+
+				RenderMeshTriangle(mesh, screenVertices, vertIdx, vertIdx & 1);
+			}*/
 			break;
+		}
 		case PrimitiveTopology::TriangleList:
-			for (size_t vertIdx{}; vertIdx < mesh.indices.size() - 2; vertIdx += 3)
+			const uint32_t numTriangles{ static_cast<uint32_t>(mesh.indices.size() - 2) / 3 };
+			concurrency::parallel_for(0u, numTriangles, [=, this](uint32_t vertIdx)
+				{
+					RenderMeshTriangle(mesh, screenVertices, vertIdx * 3);
+			
+				}
+			);
+			/*for (uint32_t vertIdx{}; vertIdx < static_cast<uint32_t>(mesh.indices.size() - 2); vertIdx += 3)
 			{
 				RenderMeshTriangle(mesh, screenVertices, vertIdx);
-			}
+			}*/
 			break;
 		}
 	}
 }
 
-void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& screenVertices, size_t vertIdx, bool swapVertices)
+void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& screenVertices, uint32_t vertIdx, bool swapVertices)
 {
 	const uint32_t vertIdx0{ mesh.indices[vertIdx + swapVertices * 2] };
 	const uint32_t vertIdx1{ mesh.indices[vertIdx + 1] };
@@ -411,39 +432,44 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 				default:
 				case RenderMode::FinalColor:
 				{
+
+					const float inv0PosW{ 1.f / mesh.vertices_out[vertIdx0].position.w };
+					const float inv1PosW{ 1.f / mesh.vertices_out[vertIdx1].position.w };
+					const float inv2PosW{ 1.f / mesh.vertices_out[vertIdx2].position.w };
+
 					const float viewDepthInterpolated
 					{
-						1.f / (1.f / mesh.vertices_out[vertIdx0].position.w * weightV0 +
-						1.f / mesh.vertices_out[vertIdx1].position.w * weightV1 +
-						1.f / mesh.vertices_out[vertIdx2].position.w * weightV2)
+						1.f / (1.f * inv0PosW * weightV0 +
+						1.f * inv1PosW * weightV1 +
+						1.f * inv2PosW * weightV2)
 					};
 
 					const Vector2 pixelUV
 					{
-						(mesh.vertices_out[vertIdx0].uv / mesh.vertices_out[vertIdx0].position.w * weightV0 +
-						mesh.vertices_out[vertIdx1].uv / mesh.vertices_out[vertIdx1].position.w * weightV1 +
-						mesh.vertices_out[vertIdx2].uv / mesh.vertices_out[vertIdx2].position.w * weightV2) * viewDepthInterpolated
+						(mesh.vertices_out[vertIdx0].uv * inv0PosW  * weightV0 +
+						mesh.vertices_out[vertIdx1].uv * inv1PosW * weightV1 +
+						mesh.vertices_out[vertIdx2].uv * inv2PosW * weightV2) * viewDepthInterpolated
 					};
 
 					const Vector3 normal
 					{
-						(mesh.vertices_out[vertIdx0].normal / mesh.vertices_out[vertIdx0].position.w * weightV0 +
-						mesh.vertices_out[vertIdx1].normal / mesh.vertices_out[vertIdx1].position.w * weightV1 +
-						mesh.vertices_out[vertIdx2].normal / mesh.vertices_out[vertIdx2].position.w * weightV2) * viewDepthInterpolated
+						(mesh.vertices_out[vertIdx0].normal * inv0PosW * weightV0 +
+						mesh.vertices_out[vertIdx1].normal * inv1PosW * weightV1 +
+						mesh.vertices_out[vertIdx2].normal * inv2PosW * weightV2) * viewDepthInterpolated
 					};
 
 					const Vector3 tangent
 					{
-						(mesh.vertices_out[vertIdx0].tangent / mesh.vertices_out[vertIdx0].position.w * weightV0 +
-						mesh.vertices_out[vertIdx1].tangent / mesh.vertices_out[vertIdx1].position.w * weightV1 +
-						mesh.vertices_out[vertIdx2].tangent / mesh.vertices_out[vertIdx2].position.w * weightV2) * viewDepthInterpolated
+						(mesh.vertices_out[vertIdx0].tangent * inv0PosW * weightV0 +
+						mesh.vertices_out[vertIdx1].tangent * inv1PosW * weightV1 +
+						mesh.vertices_out[vertIdx2].tangent * inv2PosW * weightV2) * viewDepthInterpolated
 					};
 
 					const Vector3 viewDirection
 					{
-						(mesh.vertices_out[vertIdx0].viewDirection / mesh.vertices_out[vertIdx0].position.w * weightV0 +
-						mesh.vertices_out[vertIdx1].viewDirection / mesh.vertices_out[vertIdx1].position.w * weightV1 +
-						mesh.vertices_out[vertIdx2].viewDirection / mesh.vertices_out[vertIdx2].position.w * weightV2) * viewDepthInterpolated
+						(mesh.vertices_out[vertIdx0].viewDirection * inv0PosW * weightV0 +
+						mesh.vertices_out[vertIdx1].viewDirection * inv1PosW * weightV1 +
+						mesh.vertices_out[vertIdx2].viewDirection * inv2PosW * weightV2) * viewDepthInterpolated
 					};
 
 					Vertex_Out interpolatedVertex{};

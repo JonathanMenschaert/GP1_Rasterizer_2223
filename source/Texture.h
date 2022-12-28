@@ -8,7 +8,7 @@ namespace dae
 {
 	struct Vector2;
 	
-	class Texture
+	class Texture final
 	{
 	public:
 		~Texture();
